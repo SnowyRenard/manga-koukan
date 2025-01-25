@@ -1,12 +1,16 @@
 [package]
-name = "manga_builder"
+name = "manga_koukan"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
 clap = { version = "*", features = [ "derive" ] }
 
-image = "*"
+log = "*"
+pretty_env_logger = "*"
+
+image = { version = "*", features = [ "avif-native" ] }
+rayon = "*"
 
 zip = "*"
 tar = "*"
