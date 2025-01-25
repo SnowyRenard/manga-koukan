@@ -1,56 +1,45 @@
-use std::fs::File;
+use std::{path::PathBuf, sync::Mutex};
 
-use config::Config;
-use image::{DynamicImage, ImageReader};
-use tar::Builder;
+use archive::{create_page, create_page_with_name, tar::Tar, zip::Zip, Archive};
+use image::ImageFormat;
+use rayon::prelude::*;
 
+use config::{ArchiveFormat, Config};
+
+mod archive;
 pub mod config;
 
-struct Page {
-    pub name: String,
-    pub data: DynamicImage,
-}
-impl Page {
-    fn new(dir: String) -> Self {
-        let data = ImageReader::open(&dir).unwrap().decode().unwrap();
-        Self { name: dir, data }
-    }
-}
-
-pub fn run(config: &Config) -> () {
-    println!("{:?}", config.input);
-    let pages = read_dir(config);
-
-    write_cbt(config, pages);
-}
-
-fn read_dir(config: &Config) -> Vec<Page> {
+pub fn run(config: &Config) {
+    // Get all the files recusivly
     let mut entries = std::fs::read_dir(&config.input)
         .unwrap()
         .map(|res| res.map(|e| e.path()))
         .collect::<Result<Vec<_>, std::io::Error>>()
         .unwrap();
 
-    entries.sort();
+    entries.retain_mut(|p| ImageFormat::from_path(p).is_ok());
 
-    let mut pages = vec![];
-    for e in entries {
-        let name = e.to_string_lossy().to_string();
-        println!("{}", name);
-        pages.push(Page::new(name));
-    }
-
-    pages
+    // Create archive
+    match config.archive_format {
+        ArchiveFormat::CBZ => {
+            let archive = Mutex::new(Zip::new(&config.output));
+            compress(config, &archive, &entries);
+            archive.into_inner().unwrap().finish();
+        }
+        ArchiveFormat::CBT => {
+            let archive = Mutex::new(Tar::new(&config.output));
+            compress(config, &archive, &entries);
+            archive.into_inner().unwrap().finish();
+        }
+    };
 }
 
-fn write_cbt(config: &Config, images: Vec<Page>) {
-    let file = File::create(&config.output).unwrap();
-    let mut a = Builder::new(file);
+fn compress<A: Archive>(config: &Config, archive: &Mutex<A>, entries: &Vec<PathBuf>) {
+    // Convert all the files
+    entries.par_iter().for_each(|e| {
+        create_page(config, archive, e);
+    });
 
-    for i in images {
-        a.append_file(&i.name, &mut File::open(&i.name).unwrap())
-            .unwrap();
-    }
-
-    a.finish().unwrap();
+    // Generate cover image
+    create_page_with_name(config, archive, &entries[0], "cover");
 }

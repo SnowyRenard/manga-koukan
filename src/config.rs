@@ -1,16 +1,21 @@
 use std::path::PathBuf;
 
-use clap::Parser;
+use image::ImageFormat;
 
-#[derive(Parser)]
-#[command(version, about, long_about = None)]
-///Mangabuilder is a simple app that converts a directory to .cbz
 pub struct Config {
-    ///The input path for the file or directory
-    #[arg(short, long)]
-    pub input: String,
+    pub input: PathBuf,
+    pub output: PathBuf,
 
-    ///The output path for the final document
-    #[arg(short, long)]
-    pub output: String,
+    pub image_format: Option<ImageFormat>,
+    pub archive_format: ArchiveFormat,
+
+    pub resolution: Option<[u32; 2]>,
+
+    pub remove_margine: bool,
+    pub split_pages: bool,
+}
+
+pub enum ArchiveFormat {
+    CBZ,
+    CBT,
 }
