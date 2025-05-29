@@ -12,7 +12,6 @@ use manga_koukan::{
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
-///Mangabuilder is a simple app that converts a directory to .cbt
 struct Cli {
     ///The input path for the file or directory
     input: String,
@@ -54,11 +53,8 @@ fn main() {
     let input = Path::new(&cli.input).to_path_buf();
     let output = input.with_extension(&cli.archive);
 
-    // Get the appropiate image format for conversion if needed
-    let image_format = match cli.format {
-        Some(f) => Some(ImageFormat::from_extension(f).unwrap()),
-        None => None,
-    };
+    // Get the appropriate image format for conversion if needed
+    let image_format = cli.format.map(|f| ImageFormat::from_extension(f).unwrap());
 
     // Select the appropriate file format for saving
     let archive_format = match cli.archive.as_ref() {
@@ -70,27 +66,14 @@ fn main() {
         }
     };
 
-    let resolution = match &cli.resolution {
-        Some(r) => {
-            warn!("The resizing system is still incomplete and should be patched to make sure the best resolution based on user settings should be applied");
-            let res: Vec<_> = r.split("x").collect();
-            let width = res[0].parse().unwrap();
-            let height = res[1].parse().unwrap();
+    let resolution = cli.resolution.map(|r|{
+        warn!("The resizing system is still incomplete and should be patched to make sure the best resolution based on user settings should be applied");
+        let res: Vec<_> = r.split("x").collect();
+        let width = res[0].parse().unwrap();
+        let height = res[1].parse().unwrap();
 
-            let result;
-
-            // Check if the resolution is valid
-            if width != 0 && height != 0 {
-                result = Some([width, height]);
-            } else {
-                warn!("Width and height are zero, ignoring");
-                result = None;
-            }
-
-            result
-        }
-        None => None,
-    };
+        [width, height]
+    });
 
     let config = Config {
         input,

@@ -25,7 +25,7 @@ pub(crate) mod zip;
 pub(crate) fn create_page(config: &Config, archive: &Mutex<impl Archive>, entry: &PathBuf) {
     match config.image_format {
         Some(_) => convert_page(config, archive, entry),
-        None => load_page(config, archive, entry),
+        None => load_page(archive, entry),
     }
 }
 
@@ -37,20 +37,15 @@ pub(crate) fn create_page_with_name(
 ) {
     match config.image_format {
         Some(_) => convert_page_with_name(config, archive, entry, name),
-        None => load_page_with_name(config, archive, entry, name),
+        None => load_page_with_name(archive, entry, name),
     }
 }
 
-fn load_page(config: &Config, archive: &Mutex<impl Archive>, entry: &PathBuf) {
-    load_page_with_name(config, archive, entry, entry.to_str().unwrap())
+fn load_page(archive: &Mutex<impl Archive>, entry: &PathBuf) {
+    load_page_with_name(archive, entry, entry.to_str().unwrap())
 }
 
-fn load_page_with_name(
-    _config: &Config,
-    archive: &Mutex<impl Archive>,
-    entry: &PathBuf,
-    name: &str,
-) {
+fn load_page_with_name(archive: &Mutex<impl Archive>, entry: &PathBuf, name: &str) {
     // Write file from dir to archive
     archive
         .lock()
@@ -79,11 +74,10 @@ fn convert_page_with_name(
     }
 
     // Resize the image to the final resolution
-    match &config.resolution {
-        Some(r) => {
+    if let Some(r) = config.resolution {
+        if r[0] > 0 && r[1] > 0 {
             image = image.resize(r[0], r[1], image::imageops::FilterType::Lanczos3);
         }
-        None => (),
     }
 
     // Change the extension of the file to the new image format
