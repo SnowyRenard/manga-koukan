@@ -13,26 +13,33 @@ use manga_koukan::{
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
 ///Mangabuilder is a simple app that converts a directory to .cbt
-pub struct Cli {
+struct Cli {
     ///The input path for the file or directory
-    pub input: String,
+    input: String,
 
     ///The output directory
     #[arg(short, long, default_value_t = String::from("./"))]
-    pub output: String,
+    output: String,
 
     ///The archive format for the final output
     #[arg(short, long, default_value_t = String::from("cbz"))]
-    pub archive: String,
+    archive: String,
 
     ///The image format for the final images
     #[arg(short, long, default_value = None)]
-    pub format: Option<String>,
+    format: Option<String>,
 
     ///The resolution you want the image to be converted to
     #[arg(short, long, default_value = None)]
-    pub resolution: Option<String>,
-    // For quality settings don't forget codecs like bmp which have more contorl over color so could be ideal for gray images.
+    resolution: Option<String>,
+
+    ///Try to remove the margin from all pages
+    #[arg(long, default_value_t = true)]
+    remove_margins: bool,
+
+    ///Split the pages in half if they are wider than taller
+    #[arg(long, default_value_t = true)]
+    split_pages: bool,
 }
 
 fn main() {
@@ -94,8 +101,8 @@ fn main() {
 
         resolution,
 
-        remove_margine: true,
-        split_pages: true,
+        remove_margine: cli.remove_margins,
+        split_pages: cli.split_pages,
     };
 
     run(&config);

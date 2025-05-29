@@ -1,6 +1,6 @@
 use std::{fs::File, io::Cursor, path::PathBuf, sync::Mutex};
 
-use image::{GenericImageView, ImageReader, Pixel, Rgb};
+use image::{DynamicImage, GenericImage, GenericImageView, ImageReader};
 
 use crate::config::Config;
 
@@ -8,23 +8,30 @@ use crate::config::Config;
 pub(crate) trait Archive: Sync + Send {
     /// Write arbitrary data to archive
     fn write_data(&mut self, data: Cursor<Vec<u8>>, file_name: &str);
-    /// Write a pre exisiting file to archive
+    /// Write a pre existing file to archive
     fn write_file(&mut self, file: &mut File, file_name: &str);
+    /// Write a [`image::DynamicImage`] to archive
+    fn write_image(&mut self, image: &DynamicImage, format: image::ImageFormat, file_name: &str) {
+        let mut data = Cursor::new(Vec::new());
+
+        image.write_to(&mut data, format).unwrap();
+        self.write_data(data, file_name);
+    }
 }
 
 pub(crate) mod tar;
 pub(crate) mod zip;
 
-pub(crate) fn create_page<A: Archive>(config: &Config, archive: &Mutex<A>, entry: &PathBuf) {
+pub(crate) fn create_page(config: &Config, archive: &Mutex<impl Archive>, entry: &PathBuf) {
     match config.image_format {
         Some(_) => convert_page(config, archive, entry),
         None => load_page(config, archive, entry),
     }
 }
 
-pub(crate) fn create_page_with_name<A: Archive>(
+pub(crate) fn create_page_with_name(
     config: &Config,
-    archive: &Mutex<A>,
+    archive: &Mutex<impl Archive>,
     entry: &PathBuf,
     name: &str,
 ) {
@@ -34,13 +41,13 @@ pub(crate) fn create_page_with_name<A: Archive>(
     }
 }
 
-fn load_page<A: Archive>(config: &Config, archive: &Mutex<A>, entry: &PathBuf) {
+fn load_page(config: &Config, archive: &Mutex<impl Archive>, entry: &PathBuf) {
     load_page_with_name(config, archive, entry, entry.to_str().unwrap())
 }
 
-fn load_page_with_name<A: Archive>(
+fn load_page_with_name(
     _config: &Config,
-    archive: &Mutex<A>,
+    archive: &Mutex<impl Archive>,
     entry: &PathBuf,
     name: &str,
 ) {
@@ -51,51 +58,24 @@ fn load_page_with_name<A: Archive>(
         .write_file(&mut File::open(entry.as_path()).unwrap(), name);
 }
 
-fn convert_page<A: Archive>(config: &Config, archive: &Mutex<A>, entry: &PathBuf) {
+fn convert_page(config: &Config, archive: &Mutex<impl Archive>, entry: &PathBuf) {
     let name = entry.file_stem().unwrap().to_str().unwrap();
     create_page_with_name(config, archive, entry, &name)
 }
 
-fn convert_page_with_name<A: Archive>(
+fn convert_page_with_name(
     config: &Config,
-    archive: &Mutex<A>,
+    archive: &Mutex<impl Archive>,
     entry: &PathBuf,
     name: &str,
 ) {
     // Var prep
     let mut image = ImageReader::open(entry).unwrap().decode().unwrap();
     let format = config.image_format.unwrap();
-    let mut data = Cursor::new(Vec::new());
 
     // Remove the margins on the image
     if config.remove_margine {
-        #[allow(unused)]
-        if image.width() > image.height() {
-            // Setup
-            let mut left_margin = 0;
-            let mut right_margin = image.width() - 1;
-
-            let left_margin_color = &image.get_pixel(left_margin, 0);
-            let right_margin_color = &image.get_pixel(right_margin, 0);
-
-            // Left margin
-
-            if (left_margin_color.to_rgb() != Rgb::from([0, 0, 0])) // Make sure the margin isn't white
-                || (left_margin_color.to_rgb() != Rgb::from([255, 255, 255]))
-            // Or black
-            {
-                for w in 0..image.width() {
-                    for h in 0..image.height() {
-                        break;
-                    }
-                }
-            }
-            //  Aproach
-            //  first go from outside to inside and try to find the first pixel that is different
-            //  move down until you have found a different pixel
-            //  if a pixel is different then move outside one pixel and start from the top again
-            //  if you reach the bottom then you have found the margin
-        }
+        process_margin(&mut image);
     }
 
     // Resize the image to the final resolution
@@ -106,11 +86,66 @@ fn convert_page_with_name<A: Archive>(
         None => (),
     }
 
-    image.write_to(&mut data, format).unwrap();
-
     // Change the extension of the file to the new image format
-    let file_name = format!("{}.{}", name, format.extensions_str()[0]);
 
-    // Write the data to the archive
-    archive.lock().unwrap().write_data(data, &file_name);
+    if config.split_pages && image.width() > image.height() {
+        split_pages(&mut image, archive, name, format);
+    } else {
+        // Write the data to the archive
+        let file_name = format!("{}.{}", name, format.extensions_str()[0]);
+        archive
+            .lock()
+            .unwrap()
+            .write_image(&image, format, &file_name);
+    }
+}
+
+fn process_margin(image: &mut DynamicImage) {
+    if image.width() > image.height() {
+        let mut offset = 0;
+
+        let margin_color = &image.get_pixel(image.width() - 1, 0);
+
+        image
+            .to_rgba8()
+            .enumerate_pixels()
+            .for_each(|(x, _, pixel)| {
+                // Right
+                if x > offset && pixel != margin_color {
+                    offset = x;
+                }
+            });
+
+        let margin = image.width() - offset;
+
+        *image = image
+            .sub_image(margin, 0, image.width() - margin * 2, image.height())
+            .to_image()
+            .into();
+    }
+}
+
+fn split_pages(
+    image: &mut DynamicImage,
+    archive: &Mutex<impl Archive>,
+    name: &str,
+    format: image::ImageFormat,
+) {
+    let image_a = image
+        .sub_image(0, 0, image.width() / 2 - 1, image.height())
+        .to_image();
+    let image_b = image
+        .sub_image(image.width() / 2, 0, image.width() / 2, image.height())
+        .to_image();
+
+    archive.lock().unwrap().write_image(
+        &image_a.into(),
+        format,
+        &format!("{}a.{}", name, format.extensions_str()[0]),
+    );
+    archive.lock().unwrap().write_image(
+        &image_b.into(),
+        format,
+        &format!("{}b.{}", name, format.extensions_str()[0]),
+    );
 }
