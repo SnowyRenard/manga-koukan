@@ -5,7 +5,7 @@ use image::{DynamicImage, GenericImage, GenericImageView, ImageReader};
 use crate::config::Config;
 
 /// A global trait to implement all archives
-pub(crate) trait Archive: Sync + Send {
+pub trait Archive: Send {
     /// Write arbitrary data to archive
     fn write_data(&mut self, data: Cursor<Vec<u8>>, file_name: &str);
     /// Write a pre existing file to archive
@@ -17,6 +17,7 @@ pub(crate) trait Archive: Sync + Send {
         image.write_to(&mut data, format).unwrap();
         self.write_data(data, file_name);
     }
+    fn finish(self);
 }
 
 pub(crate) mod tar;
@@ -74,14 +75,19 @@ fn convert_page_with_name(
     }
 
     // Resize the image to the final resolution
-    if let Some(r) = config.resolution {
-        if r[0] > 0 && r[1] > 0 {
-            image = image.resize(r[0], r[1], image::imageops::FilterType::Lanczos3);
+    if let Some([mut w, mut h]) = config.resolution {
+        if w != 0 || h != 0 {
+            if w == 0 {
+                w = image.width() * (h / image.height());
+            }
+            if h == 0 {
+                h = image.height() * (w / image.width());
+            }
+            image = image.resize(w, h, image::imageops::FilterType::Lanczos3);
         }
     }
 
     // Change the extension of the file to the new image format
-
     if config.split_pages && image.width() > image.height() {
         split_pages(&mut image, archive, name, format);
     } else {
@@ -96,7 +102,8 @@ fn convert_page_with_name(
 
 fn process_margin(image: &mut DynamicImage) {
     if image.width() > image.height() {
-        let mut offset = 0;
+        let mut left_margin = image.width();
+        let mut right_margin = 0;
 
         let margin_color = &image.get_pixel(image.width() - 1, 0);
 
@@ -104,16 +111,21 @@ fn process_margin(image: &mut DynamicImage) {
             .to_rgba8()
             .enumerate_pixels()
             .for_each(|(x, _, pixel)| {
+                // Left
+                if x < left_margin && pixel != margin_color {
+                    left_margin = x;
+                }
                 // Right
-                if x > offset && pixel != margin_color {
-                    offset = x;
+                if x > right_margin && pixel != margin_color {
+                    right_margin = x;
                 }
             });
 
-        let margin = image.width() - offset;
+        let offset = left_margin;
+        let width = right_margin - left_margin;
 
         *image = image
-            .sub_image(margin, 0, image.width() - margin * 2, image.height())
+            .sub_image(offset, 0, width, image.height())
             .to_image()
             .into();
     }

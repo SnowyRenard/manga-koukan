@@ -28,9 +28,6 @@ impl Zip {
 
         Self { archive, options }
     }
-    pub(crate) fn finish(self) {
-        self.archive.finish().unwrap();
-    }
 }
 
 impl Archive for Zip {
@@ -43,5 +40,8 @@ impl Archive for Zip {
         let mut contents: Vec<u8> = Vec::new();
         file.read_to_end(&mut contents).unwrap();
         self.archive.write_all(&contents).unwrap();
+    }
+    fn finish(self) {
+        self.archive.finish().unwrap();
     }
 }

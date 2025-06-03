@@ -20,9 +20,6 @@ impl Tar {
 
         Self { archive }
     }
-    pub(crate) fn finish(&mut self) {
-        self.archive.finish().unwrap();
-    }
 }
 
 impl Archive for Tar {
@@ -37,5 +34,8 @@ impl Archive for Tar {
     }
     fn write_file(&mut self, file: &mut File, file_name: &str) {
         self.archive.append_file(file_name, file).unwrap();
+    }
+    fn finish(mut self) {
+        self.archive.finish().unwrap();
     }
 }

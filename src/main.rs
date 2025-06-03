@@ -1,10 +1,6 @@
-use core::panic;
-use std::path::Path;
+use std::path::PathBuf;
 
 use clap::Parser;
-
-use image::ImageFormat;
-use log::{error, warn};
 use manga_koukan::{
     config::{ArchiveFormat, Config},
     run,
@@ -14,30 +10,30 @@ use manga_koukan::{
 #[command(version, about, long_about = None)]
 struct Cli {
     ///The input path for the file or directory
-    input: String,
+    input: PathBuf,
 
     ///The output directory
-    #[arg(short, long, default_value_t = String::from("./"))]
-    output: String,
+    #[arg(short, long)]
+    output: Option<PathBuf>,
 
     ///The archive format for the final output
-    #[arg(short, long, default_value_t = String::from("cbz"))]
-    archive: String,
+    #[arg(short, long, value_enum, default_value_t = ArchiveFormat::CBZ)]
+    archive: ArchiveFormat,
 
     ///The image format for the final images
-    #[arg(short, long, default_value = None)]
+    #[arg(short, long)]
     format: Option<String>,
 
     ///The resolution you want the image to be converted to
-    #[arg(short, long, default_value = None)]
+    #[arg(short, long)]
     resolution: Option<String>,
 
     ///Try to remove the margin from all pages
-    #[arg(long, default_value_t = true)]
+    #[arg(long, default_value_t = false)]
     remove_margins: bool,
 
     ///Split the pages in half if they are wider than taller
-    #[arg(long, default_value_t = true)]
+    #[arg(long, default_value_t = false)]
     split_pages: bool,
 }
 
@@ -50,24 +46,18 @@ fn main() {
     let cli = Cli::parse();
 
     // Get input and output directories
-    let input = Path::new(&cli.input).to_path_buf();
-    let output = input.with_extension(&cli.archive);
+    let output = cli
+        .output
+        .unwrap_or(cli.input.clone())
+        .with_extension(&Into::<&str>::into(cli.archive.clone()));
 
     // Get the appropriate image format for conversion if needed
-    let image_format = cli.format.map(|f| ImageFormat::from_extension(f).unwrap());
-
-    // Select the appropriate file format for saving
-    let archive_format = match cli.archive.as_ref() {
-        "cbz" => ArchiveFormat::CBZ,
-        "cbt" => ArchiveFormat::CBT,
-        f => {
-            error!("Couldn't recognize format {}", f);
-            panic!();
-        }
-    };
+    let image_format = cli
+        .format
+        .map(|f| image::ImageFormat::from_extension(f).unwrap());
 
     let resolution = cli.resolution.map(|r|{
-        warn!("The resizing system is still incomplete and should be patched to make sure the best resolution based on user settings should be applied");
+        log::warn!("The resizing system is still incomplete and should be patched to make sure the best resolution based on user settings should be applied");
         let res: Vec<_> = r.split("x").collect();
         let width = res[0].parse().unwrap();
         let height = res[1].parse().unwrap();
@@ -76,11 +66,11 @@ fn main() {
     });
 
     let config = Config {
-        input,
+        input: cli.input,
         output,
 
         image_format,
-        archive_format,
+        archive_format: cli.archive,
 
         resolution,
 
