@@ -29,8 +29,8 @@ struct Cli {
     resolution: Option<String>,
 
     ///Try to remove the margin from all pages
-    #[arg(long, default_value_t = false)]
-    remove_margins: bool,
+    #[arg(long)]
+    remove_margins: Option<f32>,
 
     ///Split the pages in half if they are wider than taller
     #[arg(long, default_value_t = false)]
@@ -56,8 +56,7 @@ fn main() {
         .format
         .map(|f| image::ImageFormat::from_extension(f).unwrap());
 
-    let resolution = cli.resolution.map(|r|{
-        log::warn!("The resizing system is still incomplete and should be patched to make sure the best resolution based on user settings should be applied");
+    let resolution = cli.resolution.map(|r| {
         let res: Vec<_> = r.split("x").collect();
         let width = res[0].parse().unwrap();
         let height = res[1].parse().unwrap();
@@ -74,7 +73,7 @@ fn main() {
 
         resolution,
 
-        remove_margine: cli.remove_margins,
+        remove_margin: cli.remove_margins,
         split_pages: cli.split_pages,
     };
 

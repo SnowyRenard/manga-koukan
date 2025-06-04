@@ -13,7 +13,7 @@ pub struct Config {
 
     pub resolution: Option<[u32; 2]>,
 
-    pub remove_margine: bool,
+    pub remove_margin: Option<f32>,
     pub split_pages: bool,
 }
 

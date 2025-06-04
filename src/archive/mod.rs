@@ -70,18 +70,18 @@ fn convert_page_with_name(
     let format = config.image_format.unwrap();
 
     // Remove the margins on the image
-    if config.remove_margine {
-        process_margin(&mut image);
+    if let Some(margin) = config.remove_margin {
+        process_margin(&mut image, margin);
     }
 
     // Resize the image to the final resolution
     if let Some([mut w, mut h]) = config.resolution {
         if w != 0 || h != 0 {
             if w == 0 {
-                w = image.width() * (h / image.height());
+                w = (image.width() as f32 * (h as f32 / image.height() as f32)) as u32;
             }
             if h == 0 {
-                h = image.height() * (w / image.width());
+                h = (image.height() as f32 * (w as f32 / image.width() as f32)) as u32;
             }
             image = image.resize(w, h, image::imageops::FilterType::Lanczos3);
         }
@@ -100,7 +100,7 @@ fn convert_page_with_name(
     }
 }
 
-fn process_margin(image: &mut DynamicImage) {
+fn process_margin(image: &mut DynamicImage, margin: f32) {
     if image.width() > image.height() {
         let mut left_margin = image.width();
         let mut right_margin = 0;
@@ -124,10 +124,12 @@ fn process_margin(image: &mut DynamicImage) {
         let offset = left_margin;
         let width = right_margin - left_margin;
 
-        *image = image
-            .sub_image(offset, 0, width, image.height())
-            .to_image()
-            .into();
+        if margin <= offset as f32 / image.width() as f32 {
+            *image = image
+                .sub_image(offset, 0, width, image.height())
+                .to_image()
+                .into();
+        }
     }
 }
 
@@ -138,10 +140,15 @@ fn split_pages(
     format: image::ImageFormat,
 ) {
     let image_a = image
-        .sub_image(0, 0, image.width() / 2 - 1, image.height())
+        .sub_image(0, 0, image.width() / 2, image.height())
         .to_image();
     let image_b = image
-        .sub_image(image.width() / 2, 0, image.width() / 2, image.height())
+        .sub_image(
+            (image.width() / 2) + 1,
+            0,
+            image.width() / 2,
+            image.height(),
+        )
         .to_image();
 
     archive.lock().unwrap().write_image(
