@@ -1,4 +1,4 @@
-use std::{cmp::Ordering, collections::HashMap, fs::File, io::Cursor, path::PathBuf};
+use std::{cmp::Ordering, fs::File, io::Cursor, path::PathBuf};
 
 use image::{DynamicImage, GenericImage, GenericImageView, ImageReader};
 
@@ -88,8 +88,8 @@ pub(crate) fn convert_page(config: &Config, entry: &PathBuf) -> Vec<Page> {
 }
 
 fn process_margin(image: &mut DynamicImage, margin: f32) {
-    let mut left_margin = vec![image.width(); image.height() as usize];
-    let mut right_margin = vec![0; image.height() as usize];
+    let mut left_margin = vec![image.width() / 2; image.height() as usize];
+    let mut right_margin = vec![image.width() / 2; image.height() as usize];
 
     let margin_color = &image.get_pixel(image.width() - 1, 0);
 
@@ -113,7 +113,7 @@ fn process_margin(image: &mut DynamicImage, margin: f32) {
     let offset = left_margin;
     let width = right_margin - left_margin;
 
-    if margin <= (width - image.width()) as f32 / image.width() as f32 {
+    if margin < (width - image.width()) as f32 / image.width() as f32 {
         *image = image
             .sub_image(offset, 0, width, image.height())
             .to_image()
@@ -121,9 +121,9 @@ fn process_margin(image: &mut DynamicImage, margin: f32) {
     }
 }
 
-fn vec_most_occur<T: Eq + std::hash::Hash + Copy + std::fmt::Debug>(vec: &[T]) -> T {
-    let mut counter = HashMap::new();
-    for num in vec.iter() {
+fn vec_most_occur<T: Eq + std::hash::Hash + Copy>(data: &[T]) -> T {
+    let mut counter = std::collections::HashMap::new();
+    for num in data.iter() {
         *counter.entry(num).or_insert(0) += 1;
     }
 

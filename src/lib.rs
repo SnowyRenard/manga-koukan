@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{fs::File, path::PathBuf};
 
 use archive::{tar::Tar, zip::Zip, Archive};
 use rayon::prelude::*;
@@ -47,8 +47,7 @@ fn compress(config: &Config, archive: &mut impl Archive, entries: &Vec<PathBuf>)
         // Convert all the files
         let mut pages = entries
             .par_iter()
-            .map(|e| archive::convert_page(config, e))
-            .flatten()
+            .flat_map(|e| archive::convert_page(config, e))
             .collect::<Vec<_>>();
 
         pages.sort();
@@ -68,5 +67,11 @@ fn compress(config: &Config, archive: &mut impl Archive, entries: &Vec<PathBuf>)
             "cover",
         );
     } else {
+        entries.iter().for_each(|entry| {
+            archive.write_file(
+                &mut File::open(entry).unwrap(),
+                entry.file_name().unwrap().to_str().unwrap(),
+            )
+        });
     }
 }
